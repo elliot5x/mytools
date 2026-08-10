@@ -6,7 +6,7 @@ Foi desenvolvida para realizar o padrão de recon sem que você precise se preoc
 
 Ela funciona de forma simples, você basicamente passa apenas o IP do alvo e a ferramenta faz o resto, rodando nmap, gobuster, curl, testando portas como FTP.
 
-## Requisito
+## Requisitos
 
 Você precisa de ferramentas como nmap, gobuster e o curl para que tudo funcione de forma limpa, os scripts rodam elas por trás dos panos.
 
