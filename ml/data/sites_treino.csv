@@ -1,0 +1,24 @@
+html,categoria
+<html><body><h1>Apache2 Ubuntu Default Page</h1><p>It works! This is the default welcome page used to test the correct operation of the Apache2 server after installation on Ubuntu systems.</p></body></html>,Página Padrão do Servidor
+"<html><head><title>Welcome to nginx!</title></head><body><h1>Welcome to nginx!</h1><p>If you see this page, the nginx web server is successfully installed and working. Further configuration is required.</p></body></html>",Página Padrão do Servidor
+"<html><body><h1>IIS Windows Server</h1><p>If you are seeing this page instead of the website you expected, the person responsible for this site has not yet uploaded their web site.</p></body></html>",Página Padrão do Servidor
+<html><body><h1>It works!</h1><p>This is the default index.html page installed by the web server package. No custom content has been deployed yet.</p></body></html>,Página Padrão do Servidor
+<html><head><title>Painel Administrativo</title></head><body><form method='post'><label>Usuário</label><input name='usuario'><label>Senha</label><input type='password' name='senha'><button type='submit'>Entrar</button></form><a href='/esqueci-senha'>Esqueci minha senha</a></body></html>,Painel de Login/Admin
+<html><body><h1>phpMyAdmin</h1><form action='index.php' method='post'><input name='pma_username' placeholder='Usuário'><input name='pma_password' type='password' placeholder='Senha'><input type='submit' value='Executar'></form></body></html>,Painel de Login/Admin
+<html><head><title>Router Configuration</title></head><body><h2>Login required</h2><form><input placeholder='Username'><input type='password' placeholder='Password'><button>Login</button></form><p>Restricted access area.</p></body></html>,Painel de Login/Admin
+<html><body><div class='login-box'><h3>Acesso Restrito</h3><form><input placeholder='login'><input type='password' placeholder='senha'><button>Acessar sistema</button></form><p>Área exclusiva para administradores.</p></div></body></html>,Painel de Login/Admin
+<html><head><meta name='generator' content='WordPress 6.4'><link rel='stylesheet' href='/wp-content/themes/twentytwenty/style.css'></head><body><script src='/wp-includes/js/jquery.js'></script><div id='wp-content'>Blog powered by WordPress</div></body></html>,CMS Conhecido
+<html><head><meta name='generator' content='Joomla! - Open Source Content Management'></head><body><div id='joomla-content'><script src='/media/jui/js/jquery.min.js'></script>Site desenvolvido em Joomla</div></body></html>,CMS Conhecido
+<html><head><script>var drupalSettings = {};</script></head><body class='drupal'><div id='sites/default/files'>Powered by Drupal — Content Management System</div></body></html>,CMS Conhecido
+<html><head><meta name='generator' content='WordPress 5.9'></head><body><footer>wp-content/plugins/contact-form-7</footer><div>Tema ativo: twentytwentyone</div></body></html>,CMS Conhecido
+<html><head><title>Sistema de Gestão Interna</title></head><body><nav>Dashboard Relatórios Usuários Configurações</nav><h1>Bem-vindo ao painel de controle</h1><div id='app'></div><script src='/static/js/bundle.js'></script></body></html>,Aplicação Web Customizada
+<html><body><div id='root'></div><script src='/assets/main.chunk.js'></script><script>window.API_URL='/api/v1'</script><title>App Interno</title></body></html>,Aplicação Web Customizada
+<html><head><title>Portal do Colaborador</title></head><body><header>Sistema Corporativo XYZ</header><main><h2>Meus chamados</h2><table><tr><th>ID</th><th>Status</th></tr></table></main></body></html>,Aplicação Web Customizada
+<html><body><nav class='sidebar'>Início Estoque Vendas Financeiro</nav><h1>Dashboard</h1><div class='cards'>Resumo do sistema interno de gestão</div></body></html>,Aplicação Web Customizada
+<html><head><title>Index of /</title></head><body><h1>Index of /</h1><table><tr><th>Name</th><th>Last modified</th><th>Size</th></tr><tr><td><a href='../'>Parent Directory</a></td></tr><tr><td><a href='backup.zip'>backup.zip</a></td></tr></table></body></html>,Listagem de Diretório
+<html><body><h1>Index of /uploads</h1><ul><li><a href='../'>Parent Directory</a></li><li><a href='config.php.bak'>config.php.bak</a></li><li><a href='dump.sql'>dump.sql</a></li></ul></body></html>,Listagem de Diretório
+<html><head><title>Directory listing for /files/</title></head><body><h2>Directory listing for /files/</h2><hr><ul><li><a href='report.pdf'>report.pdf</a></li><li><a href='../'>..</a></li></ul></body></html>,Listagem de Diretório
+"<html><body><pre><a href='../'>../</a>
+<a href='logs/'>logs/</a>
+<a href='old_site/'>old_site/</a>
+</pre><address>Apache Server at target Port 80</address></body></html>",Listagem de Diretório

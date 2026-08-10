@@ -2,15 +2,16 @@ import ipaddress
 from sys import exit
 from os import name
 from time import sleep
-from  subprocess import run
+from subprocess import run
+
 
 def cls():
     run(['cls'] if name == 'nt' else ['clear'])
 
-def validar_ip(ip: str) -> str:
 
+def validar_ip(ip: str) -> str:
     """Valida e retorna o IP limpo. Lança ValueError se inválido."""
-        
+
     ip = ip.strip()
 
     if not ip:
@@ -28,8 +29,8 @@ def validar_ip(ip: str) -> str:
 
     return str(endereco)
 
-def pedir_ip() -> str:
 
+def pedir_ip() -> str:
     """Loop de entrada: fica pedindo até receber um IP válido."""
 
     while True:
@@ -43,7 +44,7 @@ def pedir_ip() -> str:
         raw = input("\n[+] Digite o IP do alvo: ")
         if raw.strip().lower() == 'quit':
             raise ValueError("[-] Voltando ao menu")
-                
+
         try:
             ip = validar_ip(raw)
             print(f"[+] Alvo definido: {ip}")
