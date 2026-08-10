@@ -1,0 +1,23 @@
+# Segurança
+.env
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+
+# Java
+*.class
+*.jar
+*.log
+
+# Editor de Código (VS Code / Codium)
+.vscode/
+*.code-workspace
+
+# Sistema Operacional (Linux)
+.directory
+*~
