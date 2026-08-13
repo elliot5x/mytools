@@ -17,6 +17,7 @@ __pycache__/
 # Editor de Código (VS Code / Codium)
 .vscode/
 *.code-workspace
+ml/data/modelo.pkl
 
 # Sistema Operacional (Linux)
 .directory

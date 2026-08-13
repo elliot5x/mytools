@@ -4,8 +4,9 @@ import os
 import subprocess
 import tempfile
 import csv
+from ml.classificador_site import classificar_html, adicionar_exemplo
 from modules.validation.utils import pedir_ip, cls
-from ml.classificador_site import classificar_url
+from ml.leitor import obte_codigo_fonte
 
 
 BANNER = """[0;37;40m /░░░░░    /░  /░           /░░░    /░░░    /░░░    /░       /░░░[0m
@@ -17,7 +18,8 @@ BANNER = """[0;37;40m /░░░░░    /░  /░           /░░░    /�
 
 def executar_scan(ip):
     """Roda o scan.sh e devolve os dados estruturados (dict), ou None se falhar."""
-    caminho = os.path.abspath('./modules/recon/scan.sh')
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    caminho = os.path.join(base_dir, 'modules', 'recon', 'scan.sh')
 
     if not os.path.exists(caminho):
         print(f"\n[-] Erro: script não encontrado em {caminho}")
@@ -44,7 +46,14 @@ def executar_scan(ip):
 
 def carregar_resultado(caminho_csv):
     """Lê o CSV temporário (delimitador '|') gerado pelo scan.sh."""
-    dados = {'portas': [], 'ftp_aberto': False, 'http_aberto': False, 'diretorios': []}
+    dados = {
+        'portas': [], 
+        'ftp_aberto': False, 
+        'http_aberto': False, 
+        'diretorios': [],
+        'porta_alvo': '80',
+        'nuclei_achados': ''
+    }
 
     if not os.path.exists(caminho_csv):
         return dados
@@ -61,14 +70,18 @@ def carregar_resultado(caminho_csv):
                 dados['http_aberto'] = (valor == 'sim')
             elif tipo == 'ftp_aberto':
                 dados['ftp_aberto'] = (valor == 'sim')
+            elif tipo == 'http_alvo':
+                dados['porta_alvo'] = valor  # Captura a porta dinâmica (ex: 10000, 8080)
             elif tipo == 'diretorio':
                 dados['diretorios'].append({'caminho': chave, 'status': valor})
+            elif tipo == 'nuclei':
+                dados['nuclei_achados'] = valor
 
     return dados
 
-
 def gerar_relatorio(ip, dados):
-    """Monta o relatório final: portas + diretórios encontrados + veredito da ML."""
+    """Monta o relatório final: portas + diretórios encontrados + veredito da ML e gerencia o scan ativo."""
+    cls()
     print("\n=== RELATÓRIO FINAL ===\n")
 
     if dados['portas']:
@@ -83,20 +96,67 @@ def gerar_relatorio(ip, dados):
         for d in dados['diretorios']:
             print(f"  - {d['caminho']} (status {d['status']})")
 
-    # A resposta principal para o usuário é o veredito da ML, não os echos crus.
+    if dados.get('nuclei_achados'):
+        print("\nAchados do Nuclei:")
+        print(f"  {dados['nuclei_achados']}")
+
     if dados['http_aberto']:
-        print("\n[+] Porta HTTP aberta — classificando o site com Machine Learning...")
+        porta_web = dados.get('porta_alvo', '80')
+
+        print("\n[+] Porta HTTP aberta — cruzando HTML com dados de Recon...")
         try:
-            categoria, confianca = classificar_url(f"http://{ip}")
-            if categoria:
-                print(f"\n>>> Classificação do site: {categoria} (confiança: {confianca:.0%})")
+            html = obte_codigo_fonte(f"http://{ip}:{porta_web}") or ""
+
+            texto_recon = ""
+            
+            # Ordena as portas numéricamente para a string ser sempre igual
+            for p in sorted(dados['portas'], key=lambda x: x['porta']):
+                texto_recon += f" PORTA {p['porta']} SERVICO {p['servico']} "
+            
+            # Ordena os diretórios alfabeticamente
+            for d in sorted(dados['diretorios'], key=lambda x: x['caminho']):
+                texto_recon += f" DIRETORIO {d['caminho']} STATUS {d['status']} "
+
+            # Achados do Nuclei (já extraídos pelo scan.sh) entram junto na string final
+            texto_final = f"{texto_recon} {html} {dados.get('nuclei_achados', '')}"
+            
+            # --- PROTEÇÃO DO CSV ADICIONADA AQUI ---
+            texto_final = texto_final.replace('\n', ' ').replace('\r', ' ').strip()
+            # --------------------------------------
+
+            if texto_final:
+                categoria, confianca = classificar_html(texto_final)
+                # Assumindo que confianca venha como decimal (ex: 0.65). Se vier como 65, remova o * 100.
+                print(f"\n>>> Classificação do alvo: {categoria} (confiança: {confianca * 100:.0f}%)")
+                
+                if confianca > 0.60:
+                    # TRAVA: Human-in-the-loop
+                    print(f"\n[?] A IA quer registrar este alvo definitivamente como '{categoria}'.")
+                    print("Opções:\n")
+                    print(" [1] Sim, a categoria está correta (Validar)")
+                    print(" [2] Não, eu quero digitar a categoria correta (Ensinar nova classe)")
+                    print(" [3] Descartar achado\n")
+                    
+                    escolha = input(">>: ").strip()
+                    
+                    if escolha == '1':
+                        print("\n[+] Injetando dados validados na base de treino...\n")
+                        adicionar_exemplo(texto_final, categoria)
+                    elif escolha == '2':
+                        nova_categoria = input("\n>> Digite a categoria correta: ").strip()
+                        print(f"\n[+] Excelente! Injetando aprendizado como '{nova_categoria}'...\n")
+                        adicionar_exemplo(texto_final, nova_categoria)
+                    else:
+                        print("[-] Achado descartado. O dataset não foi alterado.\n")
+                        
+                else:
+                    print("[-] Confiança da IA muito baixa. Abortando aprendizado.\n")
+                    
             else:
-                print("\n[-] Não foi possível baixar o site para classificar.")
+                print("\n[-] Nenhum dado (HTML, Recon ou Nuclei) obtido para classificar.")
+                
         except Exception as e:
             print(f"\n[-] Erro ao classificar o site: {e}")
-    else:
-        print("\n[i] Porta HTTP fechada — nada para classificar com a ML.")
-
 
 def menu():
     while True:

@@ -10,7 +10,7 @@ def cls():
 
 
 def validar_ip(ip: str) -> str:
-    """Valida e retorna o IP limpo. Lança ValueError se inválido."""
+    """Valida e retorna o IP limpo."""
 
     ip = ip.strip()
 
