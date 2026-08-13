@@ -2,24 +2,6 @@
 
 Ferramenta de automação de recon (nmap, FTP e gobuster) que utiliza um classificador de Machine Learning para identificar a categoria da aplicação web encontrada (ex: Painel de Login, CMS, Página Padrão) em vez de apenas exibir logs brutos.
 
-## Estrutura do Projeto
-
-.
-├── main.py                      # Script principal e orquestrador
-├── requirements.txt             # Dependências Python
-├── modules/
-│   ├── validation/
-│   │   └── utils.py             # Validação de IP e utilitários de terminal
-│   └── recon/
-│       └── scan.sh              # Script Bash (nmap + FTP + gobuster)
-└── ml/
-    ├── leitor.py                 # Extração do HTML alvo
-    ├── classificador_site.py     # Treinamento e inferência do modelo
-    ├── coletar_dados.py          # Script para expandir o dataset
-    └── data/
-        ├── sites_treino.csv      # Dataset rotulado
-        └── modelo.pkl            # Cache do modelo treinado
-
 ## Como Funciona
 
 1. Varredura: O main.py executa o scan.sh para mapear portas, testar FTP anônimo e enumerar diretórios via gobuster.
