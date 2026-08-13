@@ -1,54 +1,91 @@
 """
-Script auxiliar para AMPLIAR o dataset de treino com sites reais.
+CSV de entrada esperado (por padrão ml/data/urls_para_coletar.csv),
+colunas 'url' e 'categoria':
 
-O dataset que vem pronto (ml/data/sites_treino.csv) é sintético — serve só
-para o pipeline funcionar de primeira. Para o classificador ficar
-minimamente confiável, rode este script na sua máquina (com acesso à
-internet) apontando para sites reais e categorizados manualmente por você.
+    url,categoria
+    http://192.168.1.10,Página Padrão do Servidor
+    http://192.168.1.20/admin,Painel de Login/Admin
 
-Uso (rode a partir da pasta raiz do projeto, a mesma onde está main.py):
-    1. Edite a lista URLS_TREINO abaixo, adicionando (url, categoria).
-    2. python -m ml.coletar_dados
-    3. O modelo é re-treinado automaticamente na próxima chamada de
-       classificar_url(), pois o cache (modelo.pkl) fica mais velho que o
-       CSV assim que você adiciona um exemplo novo.
-
-Dica: procure manter as categorias com uma quantidade parecida de
-exemplos entre si (ex.: ~15-20 por categoria), senão o modelo tende a
-"chutar" sempre a categoria com mais exemplos.
+Uso:
+    python -m ml.coletar_dados
+    python -m ml.coletar_dados --arquivo outras_urls.csv --workers 20
 """
+
+import os
+import csv
+import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from ml.classificador_site import adicionar_exemplo
 from ml.leitor import obte_codigo_fonte
 
-# Adicione aqui pares (url, categoria) reais para expandir o dataset.
-# Categorias sugeridas (pode criar outras, contanto que sejam consistentes
-# com o que já está em ml/data/sites_treino.csv):
-#   "Página Padrão do Servidor", "Painel de Login/Admin", "CMS Conhecido",
-#   "Aplicação Web Customizada", "Listagem de Diretório"
-URLS_TREINO = [
-    # ("http://192.168.1.10", "Página Padrão do Servidor"),
-    ("http://10.65.162.167/panel/", "Página de Upload")
-]
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_PADRAO = os.path.join(BASE_DIR, 'data', 'urls_para_coletar.csv')
+
+
+def carregar_urls(caminho):
+    """Lê o CSV de entrada e retorna lista de tuplas (url, categoria)."""
+    pares = []
+    with open(caminho, newline='', encoding='utf-8') as f:
+        leitor = csv.DictReader(f)
+        for linha in leitor:
+            url = (linha.get('url') or '').strip()
+            categoria = (linha.get('categoria') or '').strip()
+            if url and categoria:
+                pares.append((url, categoria))
+    return pares
+
+
+def _coletar_um(par):
+    url, categoria = par
+    html = obte_codigo_fonte(url)
+    if html:
+        adicionar_exemplo(html, categoria)
+        return (url, categoria, True)
+    return (url, categoria, False)
+
+
+def coletar_em_lote(caminho_csv, max_workers=10):
+    """Baixa e adiciona ao dataset todas as URLs do CSV, em paralelo."""
+    pares = carregar_urls(caminho_csv)
+    if not pares:
+        print(f"[-] Nenhuma URL válida encontrada em {caminho_csv}.")
+        print("    Formato esperado: colunas 'url' e 'categoria'.")
+        return
+
+    print(f"[+] {len(pares)} URL(s) para coletar, até {max_workers} em paralelo...\n")
+
+    sucesso, falha = 0, 0
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futuros = {executor.submit(_coletar_um, par): par for par in pares}
+        for futuro in as_completed(futuros):
+            url, categoria, ok = futuro.result()
+            if ok:
+                sucesso += 1
+                print(f"    [+] {url} -> '{categoria}' adicionado.")
+            else:
+                falha += 1
+                print(f"    [-] {url} -> falhou ao baixar.")
+
+    print(f"\n[+] Concluído: {sucesso}/{len(pares)} adicionados ({falha} falharam).")
+    print("[i] Rode o classificador normalmente — o modelo é re-treinado")
+    print("    sozinho na próxima chamada, porque o CSV de treino mudou de data.")
 
 
 def main():
-    if not URLS_TREINO:
-        print("[-] Nenhuma URL configurada. Edite URLS_TREINO neste arquivo antes de rodar.")
+    parser = argparse.ArgumentParser(description="Coleta em lote de exemplos de treino.")
+    parser.add_argument('--arquivo', default=CSV_PADRAO, help="CSV com colunas url,categoria")
+    parser.add_argument('--workers', type=int, default=10,
+                         help="Downloads simultâneos (padrão: 10 — evite exagerar contra um único alvo)")
+    args = parser.parse_args()
+
+    if not os.path.exists(args.arquivo):
+        print(f"[-] Arquivo não encontrado: {args.arquivo}")
+        print("    Crie um CSV com colunas 'url,categoria' nesse caminho,")
+        print("    ou aponte outro com --arquivo.")
         return
 
-    adicionados = 0
-    for url, categoria in URLS_TREINO:
-        print(f"[+] Coletando {url} ({categoria})...")
-        html = obte_codigo_fonte(url)
-        if html:
-            adicionar_exemplo(html, categoria)
-            adicionados += 1
-            print("    -> adicionado ao dataset.")
-        else:
-            print("    -> falhou ao baixar, pulando.")
-
-    print(f"\n[+] Concluído: {adicionados}/{len(URLS_TREINO)} exemplos adicionados.")
+    coletar_em_lote(args.arquivo, max_workers=args.workers)
 
 
 if __name__ == "__main__":

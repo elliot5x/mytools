@@ -4,17 +4,23 @@ import os
 import subprocess
 import tempfile
 import csv
-import json
 from ml.classificador_site import classificar_html, adicionar_exemplo
+from ml.relatorio_ia import gerar_analise
 from modules.validation.utils import pedir_ip, cls
 from ml.leitor import obte_codigo_fonte
 
 
-BANNER = """[0;37;40m /░░░░░    /░  /░           /░░░    /░░░    /░░░    /░       /░░░[0m
-[0;37;40m│ ▒ ▒ ▒   │//▒/▒/          │//▒/   │_▒/▒   │_▒/▒   │ ▒      │ ▒_/[0m
-[0;37;40m│ ▓ ▓ ▓    │//▓/            │ ▓    │ ▓ ▓   │ ▓ ▓   │ ▓      │/_▓ [0m
-[0;37;40m│ █ █ █     │ █             │ █    │ ███   │ ███   │ ███    /███ [0m
-[0;37;40m│//////     │//             │//    │/__/   │/__/   │/__/   │/__/ [0m"""
+BANNER = """                             █████                      ████         
+                            ░░███                      ░░███         
+ █████████████   █████ ████ ███████    ██████   ██████  ░███   █████ 
+░░███░░███░░███ ░░███ ░███ ░░░███░    ███░░███ ███░░███ ░███  ███░░  
+ ░███ ░███ ░███  ░███ ░███   ░███    ░███ ░███░███ ░███ ░███ ░░█████ 
+ ░███ ░███ ░███  ░███ ░███   ░███ ███░███ ░███░███ ░███ ░███  ░░░░███
+ █████░███ █████ ░░███████   ░░█████ ░░██████ ░░██████  █████ ██████ 
+░░░░░ ░░░ ░░░░░   ░░░░░███    ░░░░░   ░░░░░░   ░░░░░░  ░░░░░ ░░░░░░  
+                  ███ ░███                                           
+                 ░░██████                                            
+                  ░░░░░░                                             """
 
 
 def executar_scan(ip):
@@ -51,7 +57,8 @@ def carregar_resultado(caminho_csv):
         'ftp_aberto': False, 
         'http_aberto': False, 
         'diretorios': [],
-        'porta_alvo': '80'
+        'porta_alvo': '80',
+        'nuclei': ''
     }
 
     if not os.path.exists(caminho_csv):
@@ -73,58 +80,26 @@ def carregar_resultado(caminho_csv):
                 dados['porta_alvo'] = valor  # Captura a porta dinâmica (ex: 10000, 8080)
             elif tipo == 'diretorio':
                 dados['diretorios'].append({'caminho': chave, 'status': valor})
+            elif tipo == 'nuclei':
+                dados['nuclei'] = valor
 
     return dados
-
-def executar_nuclei_focado(ip, porta):
-    """Roda Nuclei em background usando a porta dinâmica, extrai as vulnerabilidades e retorna como texto."""
-    comando_base = ["nuclei", "-u", f"http://{ip}:{porta}", "-jsonl"]
-    templates = ["-severity", "medium,high,critical"]
-    comando = comando_base + templates
-    achados_ia = []
-    
-    try:
-        resultado = subprocess.run(comando, capture_output=True, text=True)
-        
-        # Lê linha por linha do output oculto
-        for linha in resultado.stdout.splitlines():
-            if not linha.strip():
-                continue
-            try:
-                dado = json.loads(linha)
-                template_id = dado.get("template-id", "")
-                info = dado.get("info", {})
-                nome_vuln = info.get("name", "Vulnerabilidade Desconhecida")
-                
-                # Tenta extrair a CVE se existir
-                cve = ""
-                if "classification" in info and "cve-id" in info["classification"]:
-                    cve = " ".join(info["classification"]["cve-id"])
-                
-                # Monta a string limpa para a IA aprender
-                tag_ia = f"NUCLEI_{template_id} {cve}".strip()
-                achados_ia.append(tag_ia)
-                
-                # Printa de forma limpa para visualização
-                print(f"[!] Encontrado: {nome_vuln} | {cve}")
-                
-            except json.JSONDecodeError:
-                continue
-
-        if not achados_ia:
-            print("[-] Nenhum finding relevante retornado pelo Nuclei.")
-            
-        return " ".join(achados_ia)
-            
-    except FileNotFoundError:
-        print("\n[-] Erro: Nuclei não está instalado ou não está no PATH do sistema.")
-        return ""
 
 
 def gerar_relatorio(ip, dados):
     """Monta o relatório final: portas + diretórios encontrados + veredito da ML e gerencia o scan ativo."""
     cls()
-    print("\n=== RELATÓRIO FINAL ===\n")
+    print("""\n                         █████                                               
+                        ░░███                                                
+  ██████  ████████    ███████      ███████  ██████   █████████████    ██████ 
+ ███░░███░░███░░███  ███░░███     ███░░███ ░░░░░███ ░░███░░███░░███  ███░░███
+░███████  ░███ ░███ ░███ ░███    ░███ ░███  ███████  ░███ ░███ ░███ ░███████ 
+░███░░░   ░███ ░███ ░███ ░███    ░███ ░███ ███░░███  ░███ ░███ ░███ ░███░░░  
+░░██████  ████ █████░░████████   ░░███████░░████████ █████░███ █████░░██████ 
+ ░░░░░░  ░░░░ ░░░░░  ░░░░░░░░     ░░░░░███ ░░░░░░░░ ░░░░░ ░░░ ░░░░░  ░░░░░░  
+                                  ███ ░███                                   
+                                 ░░██████                                    
+                                  ░░░░░░                                     \n""")
 
     if dados['portas']:
         print("Portas abertas:")
@@ -140,14 +115,14 @@ def gerar_relatorio(ip, dados):
 
     # Pega a porta web correta (padrão 80 ou a dinâmica detectada pelo Bash)
     porta_web = dados.get('porta_alvo', '80')
-    texto_nuclei = ""
-    
-    rodar_nuclei = input(f"\n[?] Deseja disparar o Nuclei (scan ativo) contra o alvo {ip}:{porta_web}? (s/n): ").strip().lower()
-    if rodar_nuclei == 's':
-        print(f"[+] Iniciando scan com Nuclei...")
-        texto_nuclei = executar_nuclei_focado(ip, porta_web)
+
+    # O Nuclei já rodou dentro do scan.sh (com a confirmação do operador lá
+    # mesmo); aqui só reaproveitamos o que veio no CSV, sem rodar de novo.
+    texto_nuclei = dados.get('nuclei', '')
+    if texto_nuclei:
+        print(f"\n[+] Achados do Nuclei (via scan.sh): {texto_nuclei}")
     else:
-        print("[-] Scan do Nuclei cancelado pelo operador.")
+        print("\n[-] Nenhum achado do Nuclei disponível (não rodou, ou não retornou findings).")
 
     if dados['http_aberto']:
         print(f"\n[+] Porta HTTP ({porta_web}) aberta — cruzando HTML com dados de Recon...")
@@ -167,7 +142,7 @@ def gerar_relatorio(ip, dados):
             if texto_final.strip():
                 # Classifica
                 categoria, confianca = classificar_html(texto_final)
-                print(f"\n>>> Classificação do alvo: {categoria} (confiança: {confianca * 100:.0f}%)")
+                print("\n" + gerar_analise(categoria, confianca, texto_recon, texto_nuclei))
                 
                 if confianca > 0.60:
                     # Concatena Nuclei + Recon para o treino

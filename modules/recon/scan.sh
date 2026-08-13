@@ -92,12 +92,30 @@ if [ -n "$portas_http" ]; then
         if [ -n "$nuclei_output" ]; then
             while IFS= read -r linha; do
                 [ -z "$linha" ] && continue
+
+                # Algumas versões do Nuclei ainda vazam banner/log pro stdout
+                # mesmo com -jsonl. Pula qualquer linha que não seja JSON
+                # válido antes de tentar extrair campos dela.
+                if ! echo "$linha" | jq -e . >/dev/null 2>&1; then
+                    continue
+                fi
+
                 template_id=$(echo "$linha" | jq -r '."template-id" // empty')
                 nome_vuln=$(echo "$linha" | jq -r '.info.name // "Vulnerabilidade Desconhecida"')
                 cve=$(echo "$linha" | jq -r '(.info.classification["cve-id"] // []) | join(" ")')
+
+                # Sem template-id não há achado de verdade pra registrar.
+                if [ -z "$template_id" ]; then
+                    continue
+                fi
+
                 echo -e "[!] Encontrado: $nome_vuln | $cve"
                 nuclei_ia="${nuclei_ia} NUCLEI_${template_id} ${cve}"
             done <<< "$nuclei_output"
+
+            if [ -z "$nuclei_ia" ]; then
+                echo -e "[-] O Nuclei retornou saída, mas nenhuma linha era um finding JSON válido.\n"
+            fi
         else
             echo -e "[-] Nenhum finding relevante retornado pelo Nuclei.\n"
         fi
