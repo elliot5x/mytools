@@ -87,10 +87,14 @@ def classificar_url(url):
 
 def adicionar_exemplo(html, categoria, caminho=DADOS_CSV):
     """Acrescenta um novo exemplo rotulado ao dataset de treino."""
+    # Sanitiza o texto para manter o padrão de linha única do CSV
+    html_limpo = html.replace('\n', ' ').replace('\r', ' ').strip()
+    
     novo_arquivo = not os.path.exists(caminho)
     os.makedirs(os.path.dirname(caminho), exist_ok=True)
     with open(caminho, 'a', newline='', encoding='utf-8') as f:
         escritor = csv.writer(f)
         if novo_arquivo:
             escritor.writerow(['html', 'categoria'])
-        escritor.writerow([html, categoria])
+        # Grava a versão sem quebras de linha
+        escritor.writerow([html_limpo, categoria])

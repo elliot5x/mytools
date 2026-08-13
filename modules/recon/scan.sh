@@ -73,7 +73,7 @@ if [ -n "$portas_http" ]; then
     if [[ "$confirma_gobuster" == "s" || "$confirma_gobuster" == "S" ]]; then
         echo -e "[+] Iniciando Gobuster em http://$ip:$porta_alvo...\n"
         gobuster_output=$(gobuster dir -u "http://$ip:$porta_alvo" \
-            -w /usr/share/seclists/Discovery/Web-Content/common.txt \
+            -w /usr/share/wordlists/dirb/common.txt \
             -t 50 \
             -x php,txt,html \
             -b 400,404,403 \

@@ -28,8 +28,7 @@ from ml.leitor import obte_codigo_fonte
 #   "Aplicação Web Customizada", "Listagem de Diretório"
 URLS_TREINO = [
     # ("http://192.168.1.10", "Página Padrão do Servidor"),
-    # ("http://192.168.1.20/admin", "Painel de Login/Admin"),
-    # ("http://192.168.1.30", "CMS Conhecido"),
+    ("http://10.65.162.167/panel/", "Página de Upload")
 ]
 
 

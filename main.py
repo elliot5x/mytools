@@ -4,6 +4,7 @@ import os
 import subprocess
 import tempfile
 import csv
+import json
 from ml.classificador_site import classificar_html, adicionar_exemplo
 from modules.validation.utils import pedir_ip, cls
 from ml.leitor import obte_codigo_fonte
@@ -18,8 +19,7 @@ BANNER = """[0;37;40m /░░░░░    /░  /░           /░░░    /�
 
 def executar_scan(ip):
     """Roda o scan.sh e devolve os dados estruturados (dict), ou None se falhar."""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    caminho = os.path.join(base_dir, 'modules', 'recon', 'scan.sh')
+    caminho = os.path.abspath('./modules/recon/scan.sh')
 
     if not os.path.exists(caminho):
         print(f"\n[-] Erro: script não encontrado em {caminho}")
@@ -51,8 +51,7 @@ def carregar_resultado(caminho_csv):
         'ftp_aberto': False, 
         'http_aberto': False, 
         'diretorios': [],
-        'porta_alvo': '80',
-        'nuclei_achados': ''
+        'porta_alvo': '80'
     }
 
     if not os.path.exists(caminho_csv):
@@ -74,10 +73,53 @@ def carregar_resultado(caminho_csv):
                 dados['porta_alvo'] = valor  # Captura a porta dinâmica (ex: 10000, 8080)
             elif tipo == 'diretorio':
                 dados['diretorios'].append({'caminho': chave, 'status': valor})
-            elif tipo == 'nuclei':
-                dados['nuclei_achados'] = valor
 
     return dados
+
+def executar_nuclei_focado(ip, porta):
+    """Roda Nuclei em background usando a porta dinâmica, extrai as vulnerabilidades e retorna como texto."""
+    comando_base = ["nuclei", "-u", f"http://{ip}:{porta}", "-jsonl"]
+    templates = ["-severity", "medium,high,critical"]
+    comando = comando_base + templates
+    achados_ia = []
+    
+    try:
+        resultado = subprocess.run(comando, capture_output=True, text=True)
+        
+        # Lê linha por linha do output oculto
+        for linha in resultado.stdout.splitlines():
+            if not linha.strip():
+                continue
+            try:
+                dado = json.loads(linha)
+                template_id = dado.get("template-id", "")
+                info = dado.get("info", {})
+                nome_vuln = info.get("name", "Vulnerabilidade Desconhecida")
+                
+                # Tenta extrair a CVE se existir
+                cve = ""
+                if "classification" in info and "cve-id" in info["classification"]:
+                    cve = " ".join(info["classification"]["cve-id"])
+                
+                # Monta a string limpa para a IA aprender
+                tag_ia = f"NUCLEI_{template_id} {cve}".strip()
+                achados_ia.append(tag_ia)
+                
+                # Printa de forma limpa para visualização
+                print(f"[!] Encontrado: {nome_vuln} | {cve}")
+                
+            except json.JSONDecodeError:
+                continue
+
+        if not achados_ia:
+            print("[-] Nenhum finding relevante retornado pelo Nuclei.")
+            
+        return " ".join(achados_ia)
+            
+    except FileNotFoundError:
+        print("\n[-] Erro: Nuclei não está instalado ou não está no PATH do sistema.")
+        return ""
+
 
 def gerar_relatorio(ip, dados):
     """Monta o relatório final: portas + diretórios encontrados + veredito da ML e gerencia o scan ativo."""
@@ -96,41 +138,41 @@ def gerar_relatorio(ip, dados):
         for d in dados['diretorios']:
             print(f"  - {d['caminho']} (status {d['status']})")
 
-    if dados.get('nuclei_achados'):
-        print("\nAchados do Nuclei:")
-        print(f"  {dados['nuclei_achados']}")
+    # Pega a porta web correta (padrão 80 ou a dinâmica detectada pelo Bash)
+    porta_web = dados.get('porta_alvo', '80')
+    texto_nuclei = ""
+    
+    rodar_nuclei = input(f"\n[?] Deseja disparar o Nuclei (scan ativo) contra o alvo {ip}:{porta_web}? (s/n): ").strip().lower()
+    if rodar_nuclei == 's':
+        print(f"[+] Iniciando scan com Nuclei...")
+        texto_nuclei = executar_nuclei_focado(ip, porta_web)
+    else:
+        print("[-] Scan do Nuclei cancelado pelo operador.")
 
     if dados['http_aberto']:
-        porta_web = dados.get('porta_alvo', '80')
-
-        print("\n[+] Porta HTTP aberta — cruzando HTML com dados de Recon...")
+        print(f"\n[+] Porta HTTP ({porta_web}) aberta — cruzando HTML com dados de Recon...")
         try:
             html = obte_codigo_fonte(f"http://{ip}:{porta_web}") or ""
-
-            texto_recon = ""
             
-            # Ordena as portas numéricamente para a string ser sempre igual
+            # Ordenação para manter consistência no dataset
+            texto_recon = ""
             for p in sorted(dados['portas'], key=lambda x: x['porta']):
                 texto_recon += f" PORTA {p['porta']} SERVICO {p['servico']} "
-            
-            # Ordena os diretórios alfabeticamente
             for d in sorted(dados['diretorios'], key=lambda x: x['caminho']):
                 texto_recon += f" DIRETORIO {d['caminho']} STATUS {d['status']} "
 
-            # Achados do Nuclei (já extraídos pelo scan.sh) entram junto na string final
-            texto_final = f"{texto_recon} {html} {dados.get('nuclei_achados', '')}"
-            
-            # --- PROTEÇÃO DO CSV ADICIONADA AQUI ---
-            texto_final = texto_final.replace('\n', ' ').replace('\r', ' ').strip()
-            # --------------------------------------
+            texto_final = f"{texto_recon} {html}"
+            texto_final = texto_final.replace('\n', ' ').replace('\r', ' ')
 
-            if texto_final:
+            if texto_final.strip():
+                # Classifica
                 categoria, confianca = classificar_html(texto_final)
-                # Assumindo que confianca venha como decimal (ex: 0.65). Se vier como 65, remova o * 100.
                 print(f"\n>>> Classificação do alvo: {categoria} (confiança: {confianca * 100:.0f}%)")
                 
                 if confianca > 0.60:
-                    # TRAVA: Human-in-the-loop
+                    # Concatena Nuclei + Recon para o treino
+                    texto_retroalimentacao = f"{texto_final} {texto_nuclei}".strip()
+                    
                     print(f"\n[?] A IA quer registrar este alvo definitivamente como '{categoria}'.")
                     print("Opções:\n")
                     print(" [1] Sim, a categoria está correta (Validar)")
@@ -141,19 +183,19 @@ def gerar_relatorio(ip, dados):
                     
                     if escolha == '1':
                         print("\n[+] Injetando dados validados na base de treino...\n")
-                        adicionar_exemplo(texto_final, categoria)
+                        adicionar_exemplo(texto_retroalimentacao, categoria)
                     elif escolha == '2':
                         nova_categoria = input("\n>> Digite a categoria correta: ").strip()
                         print(f"\n[+] Excelente! Injetando aprendizado como '{nova_categoria}'...\n")
-                        adicionar_exemplo(texto_final, nova_categoria)
+                        adicionar_exemplo(texto_retroalimentacao, nova_categoria)
                     else:
                         print("[-] Achado descartado. O dataset não foi alterado.\n")
                         
                 else:
-                    print("[-] Confiança da IA muito baixa. Abortando aprendizado.\n")
+                    print("[-] Confiança da IA muito baixa. Abortando scan automatizado e aprendizado.\n")
                     
             else:
-                print("\n[-] Nenhum dado (HTML, Recon ou Nuclei) obtido para classificar.")
+                print("\n[-] Nenhum dado (HTML ou Recon) obtido para classificar.")
                 
         except Exception as e:
             print(f"\n[-] Erro ao classificar o site: {e}")
