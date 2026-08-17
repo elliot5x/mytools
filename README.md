@@ -53,7 +53,7 @@ chmod +x modules/recon/scan.sh
 
 ## 💻 Como Usar
 
-Com o ambiente pronto, basta rodar o script principal:
+Basta rodar o script principal:
 
 ```bash
 python3 main.py
