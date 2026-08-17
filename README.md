@@ -1,39 +1,68 @@
-# Recon + ML
+# Mytools - CLI Automation & Recon
 
-Ferramenta de automação de recon (nmap, FTP e gobuster) que utiliza um classificador de Machine Learning para identificar a categoria da aplicação web encontrada (ex: Painel de Login, CMS, Página Padrão) em vez de apenas exibir logs brutos.
+Automação em Python e Shell Script que criei para agilizar o fluxo inicial de reconhecimento de rede e enumeração de serviços em ambientes de laboratório e estudo.
 
-## Como Funciona
+A ideia do projeto é centralizar comandos repetitivos em uma interface de terminal direta e organizada, validando as entradas antes de rodar os scripts de varredura.
 
-1. Varredura: O main.py executa o scan.sh para mapear portas, testar FTP anônimo e enumerar diretórios via gobuster.
-2. Estruturação: Os resultados da varredura são exportados em um CSV temporário delimitado por |.
-3. Classificação via ML: Se a porta web estiver aberta, o HTML da página é capturado e enviado ao classificador.
-4. Relatório: O terminal exibe a categoria identificada (ex: "CMS Conhecido", "Painel de Login") com a porcentagem de confiança, além do resumo de portas e diretórios.
+---
 
-## Instalação e Uso
+## 🛠️ Tecnologias e Dependências
 
+### Dependências Python
+- Python 3.10+ | Caso não tenha instalado, baixe ele aqui: https://www.python.org/downloads/
+- `rich` (formatação de terminal, painéis e cores)
+
+### Ferramentas de Sistema (CLI)
+Para os módulos em Shell Script funcionarem corretamente, é necessário ter instaladas as ferramentas utilizadas nas rotinas:
+- `nmap`
+- `gobuster`
+- `nuclei`
+- `jq`
+- `ftp`
+
+Você pode rodar: ```sudo apt install nmap gobuster nuclei jq -y```
+
+---
+
+## 🚀 Instalação
+
+1. Clone o repositório ou baixe os arquivos:
+```bash
+git clone https://github.com/elliot5x/Mytoos.git
+cd Mytools
+```
+
+2. Crie e ative um ambiente virtual:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+Para desativar é só digitar: ```deactivate``` e o ambiente venv é fechado.
+
+3. Instale as bibliotecas Python:
+```bash
 pip install -r requirements.txt
-python main.py
+```
 
-*O modelo é treinado automaticamente na primeira execução a partir de ml/data/sites_treino.csv e salvo em cache (ml/data/modelo.pkl). Ele só é re-treinado se o CSV for modificado.*
+4. Garanta permissão de execução para os scripts shell:
+```bash
+chmod +x modules/recon/scan.sh
+```
 
-## Dataset e Treinamento
+---
 
-O arquivo sites_treino.csv inicial conta com dados básicos para validação do pipeline. As categorias cobertas são:
+## 💻 Como Usar
 
-- Página Padrão do Servidor (Apache, nginx, IIS)
-- Painel de Login/Admin (Telas de autenticação, phpMyAdmin)
-- CMS Conhecido (WordPress, Joomla, Drupal)
-- Aplicação Web Customizada (Dashboards, SPAs)
-- Listagem de Diretório (Index of /)
+Com o ambiente pronto, basta rodar o script principal:
 
-### Expandindo o Dataset
+```bash
+python3 main.py
+```
 
-Para melhorar a precisão do modelo em cenários reais:
+### Fluxo de Uso
+1. Selecione a opção `[1] Reconhecimento` no menu.
+2. Insira o endereço IP que deseja analisar.
+3. O script valida se o IP informado é estruturalmente válido e dispara as rotinas interativas de verificação de portas e serviços configuradas no módulo.
+4. Para sair da aplicação, escolha a opção `[2] Sair`.
 
-1. Coleta Direta: Adicione as URLs e suas respectivas categorias no array URLS_TREINO dentro de ml/coletar_dados.py e execute:
-   python -m ml.coletar_dados
-2. Laboratórios Controlados: Aponte a coleta para aplicações de teste conhecidas (como Metasploitable, DVWA ou instalações locais de CMS) para gerar amostras realistas.
-
-## Aviso Legal
-
-Ferramenta desenvolvida exclusivamente para fins educacionais e testes autorizados. Não execute escaneamentos em alvos sem autorização prévia.
+---

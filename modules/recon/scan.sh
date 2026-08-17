@@ -1,46 +1,60 @@
 #!/bin/bash
 
-set -uo pipefail 
+set -uo pipefail
 
-ip="${1:?Uso: scan.sh <ip> [arquivo_resultado.csv]}"
-resultado_arquivo="${2:-$(mktemp --suffix=.csv)}"
+ip="${1:?Uso: scan.sh <ip>}"
 
-clear
-echo -e "[+] Escaneando portas em $ip...\n"
+VERDE='\033[92m'
+AMARELO='\033[93m'
+VERMELHO='\033[91m'
+CIANO='\033[96m'
+NEGRITO='\033[1m'
+RESET='\033[0m'
+
+echo -e "${NEGRITO}${CIANO}[+] Escaneando portas em $ip...${RESET}\n"
 
 nmap_output=$(nmap -sV -sC --open "$ip" 2>/dev/null) || nmap_output=""
 
-ftp_aberto=$(echo "$nmap_output" | grep "21/tcp" | grep "open" || true)
-http_aberto=$(echo "$nmap_output" | awk '/open/ && /http/' || true)
-ssh_aberto=$(echo "$nmap_output" | grep "22/tcp" | grep "open" || true)
+portas_abertas=$(echo "$nmap_output" | awk '/^[0-9]+\/tcp/ && /open/')
 
-ftp_testado="nao"
+if [ -n "$portas_abertas" ]; then
+    echo -e "${NEGRITO}Portas abertas:${RESET}"
+    while IFS= read -r linha; do
+        [ -z "$linha" ] && continue
+        porta=$(echo "$linha" | awk -F/ '{print $1}')
+        resto=$(echo "$linha" | awk '{$1=$2=$3=""; print $0}' | sed -e 's/^[ \t]*//')
+        echo -e "  ${VERDE}●${RESET} ${porta}\t${resto}"
+    done <<< "$portas_abertas"
+    echo ""
+else
+    echo -e "${VERMELHO}[-] Nenhuma porta aberta encontrada.${RESET}\n"
+fi
+
+ftp_aberto=$(echo "$nmap_output" | grep "21/tcp" | grep "open" || true)
+ssh_aberto=$(echo "$nmap_output" | grep "22/tcp" | grep "open" || true)
 
 # ── SSH ──────────────────────────────────────────────
 if [ -n "$ssh_aberto" ]; then
-    echo -e "[+] Porta SSH (22) encontrada!\n"
+    echo -e "${VERDE}[+] Porta SSH (22) encontrada!${RESET}\n"
 fi
 
 # ── FTP ──────────────────────────────────────────────
 if [ -n "$ftp_aberto" ]; then
-    echo -e "[+] Porta FTP (21) encontrada!\n"
-    read -p "[?] Tentar logar como anônimo? (s/n): " confirmar
+    echo -e "${VERDE}[+] Porta FTP (21) encontrada!${RESET}\n"
+    read -p "$(echo -e "${AMARELO}[?] Tentar logar como anônimo? (s/n): ${RESET}")" confirmar
 
     if [[ "$confirmar" == "s" || "$confirmar" == "S" ]]; then
         echo -e "[+] Iniciando processo...\n"
-        ftp_testado="sim"
         ftp "anonymous@$ip" || true
     else
         echo -e "[-] Pulando etapa...\n"
     fi
 else
-    echo -e "[-] Porta FTP (21) fechada ou filtrada.\n"
+    echo -e "${VERMELHO}[-] Porta FTP (21) fechada ou filtrada.${RESET}\n"
 fi
 
 # ── HTTP / Gobuster Dinâmico ──────────────────────────
-gobuster_output=""
 porta_alvo=""
-nuclei_ia=""
 
 portas_http=$(echo "$nmap_output" | awk '/open/ && /http/ {split($1, a, "/"); print a[1]}')
 
@@ -49,53 +63,51 @@ if [ -n "$portas_http" ]; then
 
     if [ "$qtd_portas" -gt 1 ]; then
         portas_linha=$(echo "$portas_http" | tr '\n' ' ')
-        echo -e "\n[+] Múltiplos serviços web encontrados nas portas: $portas_linha"
+        echo -e "\n${NEGRITO}[+] Múltiplos serviços web encontrados nas portas:${RESET} $portas_linha"
 
         while true; do
-            read -p "[?] Qual porta você deseja usar para o Gobuster? " porta_alvo
+            read -p "$(echo -e "${AMARELO}[?] Qual porta você deseja usar para o Gobuster? ${RESET}")" porta_alvo
             if [[ ! "$porta_alvo" =~ ^[0-9]+$ ]]; then
-                echo -e "[-] Entrada inválida: digite apenas o número da porta.\n"
+                echo -e "${VERMELHO}[-] Entrada inválida: digite apenas o número da porta.${RESET}\n"
                 continue
             fi
             if ! grep -qx "$porta_alvo" <<< "$portas_http"; then
-                echo -e "[-] Porta $porta_alvo não está na lista encontrada pelo nmap. Tente novamente.\n"
+                echo -e "${VERMELHO}[-] Porta $porta_alvo não está na lista encontrada pelo nmap. Tente novamente.${RESET}\n"
                 continue
             fi
             break
         done
     else
         porta_alvo=$portas_http
-        echo -e "\n[+] Serviço web detectado na porta: $porta_alvo"
+        echo -e "\n${VERDE}[+] Serviço web detectado na porta:${RESET} $porta_alvo"
     fi
 
-    read -p "[?] Deseja rodar o Gobuster na porta $porta_alvo? (s/n): " confirma_gobuster
+    read -p "$(echo -e "${AMARELO}[?] Deseja rodar o Gobuster na porta $porta_alvo? (s/n): ${RESET}")" confirma_gobuster
 
     if [[ "$confirma_gobuster" == "s" || "$confirma_gobuster" == "S" ]]; then
         echo -e "[+] Iniciando Gobuster em http://$ip:$porta_alvo...\n"
-        gobuster_output=$(gobuster dir -u "http://$ip:$porta_alvo" \
+        gobuster dir -u "http://$ip:$porta_alvo" \
             -w /usr/share/wordlists/dirb/common.txt \
             -t 50 \
             -x php,txt,html \
             -b 400,404,403 \
-            --no-error 2>/dev/null) || true
+            --no-error 2>/dev/null || true
     else
         echo -e "[-] Pulando etapa do Gobuster...\n"
     fi
 
     # ── Nuclei ─────────────────────────────────────────
-    read -p "[?] Deseja disparar o Nuclei (scan ativo) na porta $porta_alvo? (s/n): " confirma_nuclei
+    read -p "$(echo -e "${AMARELO}[?] Deseja disparar o Nuclei (scan ativo) na porta $porta_alvo? (s/n): ${RESET}")" confirma_nuclei
 
     if [[ "$confirma_nuclei" == "s" || "$confirma_nuclei" == "S" ]]; then
         echo -e "[+] Iniciando scan com Nuclei...\n"
         nuclei_output=$(nuclei -u "http://$ip:$porta_alvo" -jsonl -severity medium,high,critical 2>/dev/null) || true
 
         if [ -n "$nuclei_output" ]; then
+            achou=0
             while IFS= read -r linha; do
                 [ -z "$linha" ] && continue
 
-                # Algumas versões do Nuclei ainda vazam banner/log pro stdout
-                # mesmo com -jsonl. Pula qualquer linha que não seja JSON
-                # válido antes de tentar extrair campos dela.
                 if ! echo "$linha" | jq -e . >/dev/null 2>&1; then
                     continue
                 fi
@@ -104,62 +116,25 @@ if [ -n "$portas_http" ]; then
                 nome_vuln=$(echo "$linha" | jq -r '.info.name // "Vulnerabilidade Desconhecida"')
                 cve=$(echo "$linha" | jq -r '(.info.classification["cve-id"] // []) | join(" ")')
 
-                # Sem template-id não há achado de verdade pra registrar.
                 if [ -z "$template_id" ]; then
                     continue
                 fi
 
-                echo -e "[!] Encontrado: $nome_vuln | $cve"
-                nuclei_ia="${nuclei_ia} NUCLEI_${template_id} ${cve}"
+                achou=1
+                echo -e "  ${VERMELHO}⚠${RESET}  $nome_vuln ${AMARELO}$cve${RESET}"
             done <<< "$nuclei_output"
 
-            if [ -z "$nuclei_ia" ]; then
-                echo -e "[-] O Nuclei retornou saída, mas nenhuma linha era um finding JSON válido.\n"
+            if [ "$achou" -eq 0 ]; then
+                echo -e "${VERMELHO}[-] O Nuclei retornou saída, mas nenhuma linha era um finding JSON válido.${RESET}\n"
             fi
         else
-            echo -e "[-] Nenhum finding relevante retornado pelo Nuclei.\n"
+            echo -e "${VERMELHO}[-] Nenhum finding relevante retornado pelo Nuclei.${RESET}\n"
         fi
     else
         echo -e "[-] Scan do Nuclei cancelado pelo operador.\n"
     fi
 else
-    echo -e "[-] Nenhuma porta HTTP encontrada. Pulando Gobuster e Nuclei.\n"
+    echo -e "${VERMELHO}[-] Nenhuma porta HTTP encontrada. Pulando Gobuster e Nuclei.${RESET}\n"
 fi
-
-# ── Monta o CSV de resultado ──────────────────────────
-resultado_portas=$(echo "$nmap_output" | grep "open" 2>/dev/null || true)
-resultado_diretorios=$(echo "$gobuster_output" | grep "Status" 2>/dev/null || true)
-
-{
-    if [ -n "$resultado_portas" ]; then
-        while IFS= read -r linha; do
-            [ -z "$linha" ] && continue
-            porta=$(echo "$linha" | awk '{print $1}')
-            servico=$(echo "$linha" | awk '{print $3}')
-            info=$(echo "$linha" | cut -d' ' -f4- | sed 's/|/-/g')
-            echo "porta|${porta}|${servico}:${info}"
-        done <<< "$resultado_portas"
-    fi
-
-    ftp_status="nao"; [ -n "$ftp_aberto" ] && ftp_status="sim"
-    http_status="nao"; [ -n "$portas_http" ] && http_status="sim"
-
-    echo "ftp_aberto|${ip}|${ftp_status}"
-    echo "ftp_testado|${ip}|${ftp_testado}"
-    echo "http_aberto|${ip}|${http_status}"
-    [ -n "$porta_alvo" ] && echo "http_alvo|${ip}|${porta_alvo}"
-    [ -n "$nuclei_ia" ] && echo "nuclei|${ip}|$(echo "$nuclei_ia" | sed 's/|/-/g' | xargs)"
-
-    if [ -n "$resultado_diretorios" ]; then
-        while IFS= read -r linha; do
-            [ -z "$linha" ] && continue
-            caminho=$(echo "$linha" | awk '{print $1}' | sed 's/|/-/g')
-            status=$(echo "$linha" | grep -oE 'Status: [0-9]+' | grep -oE '[0-9]+')
-            echo "diretorio|${caminho}|${status}"
-        done <<< "$resultado_diretorios"
-    fi
-} > "$resultado_arquivo"
-
-echo -e "\n[+] Resultado estruturado salvo em: $resultado_arquivo\n"
 
 exit 0

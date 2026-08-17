@@ -1,4 +1,1 @@
-requests
-scikit-learn
-pandas
-joblib
+rich>=13.0.0
